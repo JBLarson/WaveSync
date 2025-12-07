@@ -1,39 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SYNTH_DURATION="${WAVESYNC_DURATION:-60}"
-SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-0-42}"
-SYNTH_VOLUME="${WAVESYNC_VOLUME:-0.28}"
+# ═══════════════════════════════════════════════════════════════════════════════
+#  waveSync · sound healing infrastructure · v1.0.0
+# ═══════════════════════════════════════════════════════════════════════════════
 
-C0='\033[38;2;4;2;10m'
-C1='\033[38;2;8;5;18m'
-C2='\033[38;2;14;9;30m'
-C3='\033[38;2;22;15;46m'
-C4='\033[38;2;32;22;64m'
-C5='\033[38;2;44;32;86m'
-C6='\033[38;2;58;44;110m'
-C7='\033[38;2;74;58;134m'
-C8='\033[38;2;92;74;158m'
-C9='\033[38;2;112;92;184m'
-R='\033[0m'
+readonly SYNTH_DURATION="${WAVESYNC_DURATION:-60}"
+readonly SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-20-200}"
+readonly SYNTH_VOLUME="${WAVESYNC_VOLUME:-0.28}"
 
-get_width() { tput cols 2>/dev/null || echo 80; }
+# ═══════════════════════════════════════════════════════════════════════════════
+#  IRIDESCENT INDIGO PALETTE
+# ═══════════════════════════════════════════════════════════════════════════════
 
-check_sox() {
-    command -v play &>/dev/null && return
-    echo -e "\n${C7}[waveSync]${R} ${C5}SoX required${R}"
-    [[ "$(uname -s)" == Darwin* ]] && echo -e "  ${C4}brew install sox${R}" || echo -e "  ${C4}sudo apt install sox libsox-fmt-all${R}"
-    exit 1
+readonly C_VOID='\033[38;2;8;8;18m'
+readonly C_ABYSS='\033[38;2;15;12;30m'
+readonly C_DEEP='\033[38;2;25;20;50m'
+readonly C_CORE='\033[38;2;35;28;70m'
+readonly C_MID='\033[38;2;45;36;90m'
+readonly C_RISE='\033[38;2;55;44;110m'
+readonly C_SHIMMER='\033[38;2;65;52;130m'
+readonly C_PEARL='\033[38;2;75;60;145m'
+readonly C_GLOW='\033[38;2;90;75;160m'
+readonly C_ACCENT='\033[38;2;110;90;180m'
+readonly C_DIM='\033[2m'
+readonly C_RESET='\033[0m'
+
+readonly BOX_TL='╭' BOX_TR='╮' BOX_BL='╰' BOX_BR='╯' BOX_H='─' BOX_V='│' BOX_WAVE='∿'
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  UTILITY FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+get_width() {
+    tput cols 2>/dev/null || echo "${COLUMNS:-80}"
 }
 
-get_audio() {
-    case "$(uname -s)" in
-        Darwin*) system_profiler SPAudioDataType 2>/dev/null | grep -E "^\s+[A-Za-z].*:$" | head -1 | sed 's/^[[:space:]]*//;s/:$//' || true ;;
-        *) aplay -l 2>/dev/null | grep -E "^card" | head -1 | sed 's/card [0-9]: //;s/,.*//' || true ;;
-    esac
+strip_ansi() {
+    echo -e "$1" | sed $'s/\x1b\\[[0-9;]*m//g'
 }
-
-strip_ansi() { echo -e "$1" | sed $'s/\x1b\\[[0-9;]*m//g'; }
 
 ctr() {
     local text="$1"
@@ -47,74 +52,192 @@ ctr() {
     echo -e "$text"
 }
 
-render() {
-    local start_ts="$1"
-    local end_ts="${2:-}"
-    local audio
-    audio=$(get_audio)
+repeat_char() {
+    local char="$1"
+    local count="$2"
+    local result=""
+    for ((i=0; i<count; i++)); do
+        result+="$char"
+    done
+    echo "$result"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SYSTEM DETECTION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+detect_os() {
+    case "$(uname -s)" in
+        Darwin*) echo "macos" ;;
+        Linux*)
+            if [[ -f /etc/os-release ]]; then
+                source /etc/os-release
+                if [[ "${ID:-}" =~ ^(raspbian|debian)$ ]] || [[ "${ID_LIKE:-}" == *debian* ]]; then
+                    echo "debian"
+                else
+                    echo "linux"
+                fi
+            else
+                echo "linux"
+            fi
+            ;;
+        *) echo "unix" ;;
+    esac
+}
+
+check_sox() {
+    command -v play &>/dev/null && return
+    echo -e "\n${C_ACCENT}[waveSync]${C_RESET} ${C_GLOW}SoX not detected${C_RESET}\n"
+    case "$(detect_os)" in
+        macos)  echo -e "  ${C_MID}install:${C_RESET} ${C_SHIMMER}brew install sox${C_RESET}" ;;
+        *)      echo -e "  ${C_MID}install:${C_RESET} ${C_SHIMMER}sudo apt install sox libsox-fmt-all${C_RESET}" ;;
+    esac
+    echo ""
+    exit 1
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  AUDIO INTROSPECTION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+get_audio_info() {
+    local info=""
+    case "$(uname -s)" in
+        Darwin*)
+            local dev
+            dev=$(system_profiler SPAudioDataType 2>/dev/null | grep -E "^\s+[A-Za-z].*:$" | head -1 | sed 's/^[[:space:]]*//;s/:$//' || true)
+            [[ -n "$dev" ]] && info="${C_DEEP}output${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${dev}${C_RESET}"
+            if ioreg -c IOUSBHostDevice 2>/dev/null | grep -qi "audio\|dac"; then
+                [[ -n "$info" ]] && info+="  "
+                info+="${C_DEEP}interface${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}USB Audio${C_RESET}"
+            fi
+            ;;
+        *)
+            local card
+            card=$(aplay -l 2>/dev/null | grep -E "^card" | head -1 | sed 's/card [0-9]: //;s/,.*//' || true)
+            [[ -n "$card" ]] && info="${C_DEEP}device${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${card}${C_RESET}"
+            local sink
+            sink=$(pactl get-default-sink 2>/dev/null || true)
+            if [[ -n "$sink" && "$sink" != "null" ]]; then
+                [[ -n "$info" ]] && info+="  "
+                info+="${C_DEEP}sink${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${sink}${C_RESET}"
+            fi
+            ;;
+    esac
+    echo -e "$info"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  BANNER RENDERING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+render_header() {
+    local width
+    width=$(get_width)
+    local banner_width=72
+    (( width < banner_width )) && banner_width=$((width - 4))
+    
+    local wave_line
+    wave_line=$(repeat_char "$BOX_WAVE" $((banner_width - 2)))
+    local h_line
+    h_line=$(repeat_char "$BOX_H" $((banner_width - 2)))
     
     clear
     echo ""
-    echo ""
     
-    ctr "${C1}██╗    ██╗${C2}  ██████╗${R}"
-    ctr "${C2}██║    ██║${C3} ██╔════╝${R}"
-    ctr "${C3}██║ █╗ ██║${C4} ╚█████╗${R}"
-    ctr "${C4}██║███╗██║${C5}  ╚═══██╗${R}"
-    ctr "${C5}╚███╔███╔╝${C6} ██████╔╝${R}"
-    ctr "${C6} ╚══╝╚══╝${C7}  ╚═════╝${R}"
+    ctr "${C_ABYSS}${BOX_TL}${C_DEEP}${wave_line}${C_ABYSS}${BOX_TR}${C_RESET}"
+    ctr "${C_DEEP}${BOX_V}${C_RESET}$(printf "%*s" $((banner_width-2)) "")${C_DEEP}${BOX_V}${C_RESET}"
     
-    echo ""
-    ctr "${C4}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}"
-    echo ""
-    ctr "${C5}w ${C6}a ${C5}v ${C6}e ${C7}S ${C8}y ${C7}n ${C8}c${R}"
-    echo ""
-    ctr "${C6}◈  ${C5}s o u n d   h e a l i n g   i n f r a s t r u c t u r e${R}  ${C6}◈${R}"
-    echo ""
-    ctr "${C4}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${R}"
-    echo ""
+    ctr "${C_DEEP}${BOX_V}${C_RESET}      ${C_ABYSS}██╗    ██╗${C_DEEP}  ██████╗${C_RESET}      ${C_DEEP}${BOX_V}${C_RESET}"
+    ctr "${C_DEEP}${BOX_V}${C_RESET}      ${C_DEEP}██║    ██║${C_CORE} ██╔════╝${C_RESET}      ${C_DEEP}${BOX_V}${C_RESET}"
+    ctr "${C_DEEP}${BOX_V}${C_RESET}      ${C_CORE}██║ █╗ ██║${C_MID} ╚█████╗${C_RESET}       ${C_DEEP}${BOX_V}${C_RESET}"
+    ctr "${C_DEEP}${BOX_V}${C_RESET}      ${C_MID}██║███╗██║${C_RISE}  ╚═══██╗${C_RESET}      ${C_DEEP}${BOX_V}${C_RESET}"
+    ctr "${C_DEEP}${BOX_V}${C_RESET}      ${C_RISE}╚███╔███╔╝${C_SHIMMER} ██████╔╝${C_RESET}      ${C_DEEP}${BOX_V}${C_RESET}"
+    ctr "${C_DEEP}${BOX_V}${C_RESET}      ${C_SHIMMER} ╚══╝╚══╝${C_PEARL}  ╚═════╝${C_RESET}       ${C_DEEP}${BOX_V}${C_RESET}"
     
-    ctr "${C4}start${R}  ${C6}·${R}  ${C8}${start_ts}${R}"
-    [[ -n "$end_ts" ]] && ctr "${C4}end  ${R}  ${C6}·${R}  ${C8}${end_ts}${R}"
-    echo ""
+    ctr "${C_DEEP}${BOX_V}${C_RESET}$(printf "%*s" $((banner_width-2)) "")${C_DEEP}${BOX_V}${C_RESET}"
+    ctr "${C_CORE}${BOX_V}${C_DIM}${C_DEEP}${h_line}${C_RESET}${C_CORE}${BOX_V}${C_RESET}"
+    ctr "${C_DEEP}${BOX_V}${C_RESET}$(printf "%*s" $((banner_width-2)) "")${C_DEEP}${BOX_V}${C_RESET}"
     
-    [[ -n "$audio" ]] && { ctr "${C4}out${R} ${C6}·${R} ${C8}${audio}${R}"; echo ""; }
+    ctr "${C_DEEP}${BOX_V}${C_RESET}          ${C_MID}◈  ${C_RISE}s o u n d   h e a l i n g${C_MID}  ◈${C_RESET}          ${C_DEEP}${BOX_V}${C_RESET}"
     
-    ctr "${C4}sine${R} ${C6}·${R} ${C8}${SYNTH_FREQ_RANGE}Hz${R}   ${C4}dur${R} ${C6}·${R} ${C8}${SYNTH_DURATION}s${R}   ${C4}vol${R} ${C6}·${R} ${C8}${SYNTH_VOLUME}${R}"
+    ctr "${C_DEEP}${BOX_V}${C_RESET}$(printf "%*s" $((banner_width-2)) "")${C_DEEP}${BOX_V}${C_RESET}"
+    ctr "${C_ABYSS}${BOX_BL}${C_DEEP}${wave_line}${C_ABYSS}${BOX_BR}${C_RESET}"
     echo ""
 }
 
-status() { ctr "${C6}[ ${C8}$1${C6} ]${R}"; }
+render_info() {
+    local audio_info
+    audio_info=$(get_audio_info)
+    
+    [[ -n "$audio_info" ]] && { ctr "$audio_info"; echo ""; }
+    
+    local synth_info="${C_DEEP}sine${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${SYNTH_FREQ_RANGE}Hz${C_RESET}  "
+    synth_info+="${C_DEEP}duration${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${SYNTH_DURATION}s${C_RESET}  "
+    synth_info+="${C_DEEP}vol${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${SYNTH_VOLUME}${C_RESET}"
+    ctr "$synth_info"
+    echo ""
+    
+    ctr "${C_CORE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+    echo ""
+}
+
+render_timestamp() {
+    local label="$1"
+    local timestamp="$2"
+    ctr "${C_DEEP}${label}${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${timestamp}${C_RESET}"
+}
+
+render_status() {
+    local message="$1"
+    local color="${2:-$C_SHIMMER}"
+    ctr "${C_MID}[${C_RESET}${color}${message}${C_RESET}${C_MID}]${C_RESET}"
+}
+
+run_synth() {
+    play -n synth "$1" sine "$2" vol "$3"
+}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SIGNAL HANDLING
+# ═══════════════════════════════════════════════════════════════════════════════
 
 cleanup() {
-    END_TS=$(date '+%Y-%m-%d %H:%M:%S %Z')
+    END_TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S %Z")
     echo ""
-    render "$START_TS" "$END_TS"
-    status "terminated"
+    render_timestamp "session end  " "$END_TIMESTAMP"
+    echo ""
+    render_status "terminated" "$C_ACCENT"
     echo ""
     exit 0
 }
 
 trap cleanup INT TERM
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  MAIN
+# ═══════════════════════════════════════════════════════════════════════════════
+
 main() {
     check_sox
-    START_TS=$(date '+%Y-%m-%d %H:%M:%S %Z')
-    render "$START_TS"
-    status "initializing"
-    sleep 1
-    render "$START_TS"
-    status "synthesizing ${SYNTH_FREQ_RANGE}Hz"
+    
+    render_header
+    render_info
+    
+    START_TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S %Z")
+    render_timestamp "session start" "$START_TIMESTAMP"
     echo ""
     
-    play -n synth 60 sine 20-28 vol 0.42
-
-    # repeatedly failing Claude attempt
-    #play -n synth "$SYNTH_DURATION" sine "$SYNTH_FREQ_RANGE" vol "$SYNTH_VOLUME"
+    render_status "synthesizing" "$C_PEARL"
+    echo ""
+    run_synth "$SYNTH_DURATION" "$SYNTH_FREQ_RANGE" "$SYNTH_VOLUME"
     
-    END_TS=$(date '+%Y-%m-%d %H:%M:%S %Z')
-    render "$START_TS" "$END_TS"
-    status "complete"
+    END_TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S %Z")
+    render_timestamp "session end  " "$END_TIMESTAMP"
+    echo ""
+    
+    render_status "complete" "$C_GLOW"
     echo ""
 }
 
