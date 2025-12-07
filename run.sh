@@ -1,12 +1,12 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  waveSync · sound healing infrastructure · v1.0.0
+#  waveSync · sound healing infrastructure · v0.1.0
 # ═══════════════════════════════════════════════════════════════════════════════
 
 readonly SYNTH_DURATION="${WAVESYNC_DURATION:-60}"
-readonly SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-20-200}"
+readonly SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-30-120}"
 readonly SYNTH_VOLUME="${WAVESYNC_VOLUME:-0.28}"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -96,36 +96,6 @@ check_sox() {
     exit 1
 }
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  AUDIO INTROSPECTION
-# ═══════════════════════════════════════════════════════════════════════════════
-
-get_audio_info() {
-    local info=""
-    case "$(uname -s)" in
-        Darwin*)
-            local dev
-            dev=$(system_profiler SPAudioDataType 2>/dev/null | grep -E "^\s+[A-Za-z].*:$" | head -1 | sed 's/^[[:space:]]*//;s/:$//' || true)
-            [[ -n "$dev" ]] && info="${C_DEEP}output${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${dev}${C_RESET}"
-            if ioreg -c IOUSBHostDevice 2>/dev/null | grep -qi "audio\|dac"; then
-                [[ -n "$info" ]] && info+="  "
-                info+="${C_DEEP}interface${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}USB Audio${C_RESET}"
-            fi
-            ;;
-        *)
-            local card
-            card=$(aplay -l 2>/dev/null | grep -E "^card" | head -1 | sed 's/card [0-9]: //;s/,.*//' || true)
-            [[ -n "$card" ]] && info="${C_DEEP}device${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${card}${C_RESET}"
-            local sink
-            sink=$(pactl get-default-sink 2>/dev/null || true)
-            if [[ -n "$sink" && "$sink" != "null" ]]; then
-                [[ -n "$info" ]] && info+="  "
-                info+="${C_DEEP}sink${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${sink}${C_RESET}"
-            fi
-            ;;
-    esac
-    echo -e "$info"
-}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  BANNER RENDERING
@@ -167,10 +137,7 @@ render_header() {
 }
 
 render_info() {
-    local audio_info
-    audio_info=$(get_audio_info)
-    
-    [[ -n "$audio_info" ]] && { ctr "$audio_info"; echo ""; }
+
     
     local synth_info="${C_DEEP}sine${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${SYNTH_FREQ_RANGE}Hz${C_RESET}  "
     synth_info+="${C_DEEP}duration${C_RESET} ${C_MID}◈${C_RESET} ${C_SHIMMER}${SYNTH_DURATION}s${C_RESET}  "
