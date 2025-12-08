@@ -5,9 +5,9 @@ set -euo pipefail
 #  waveSync · sound healing infrastructure · v0.1.0
 # ═══════════════════════════════════════════════════════════════════════════════
 
-readonly SYNTH_DURATION="${WAVESYNC_DURATION:-60}"
-readonly SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-30-120}"
-readonly SYNTH_VOLUME="${WAVESYNC_VOLUME:-0.28}"
+readonly SYNTH_DURATION="${WAVESYNC_DURATION:-1200}"
+readonly SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-28-33}"
+readonly SYNTH_VOLUME="${WAVESYNC_VOLUME:-0.24}"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  IRIDESCENT INDIGO PALETTE
@@ -163,6 +163,10 @@ render_status() {
 
 run_synth() {
     play -n synth "$1" sine "$2" vol "$3"
+    sleep 2
+    play -n synth "$1" sine "$2" vol "$3"
+
+
 }
 
 
