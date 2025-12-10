@@ -6,7 +6,7 @@ set -euo pipefail
 # ═══════════════════════════════════════════════════════════════════════════════
 
 readonly SYNTH_DURATION="${WAVESYNC_DURATION:-1200}"
-readonly SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-28-33}"
+readonly SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-26-40}"
 readonly SYNTH_VOLUME="${WAVESYNC_VOLUME:-0.24}"
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -161,13 +161,15 @@ render_status() {
     ctr "${C_MID}[${C_RESET}${color}${message}${C_RESET}${C_MID}]${C_RESET}"
 }
 
-run_synth() {
+run_synth_custom() {
     play -n synth "$1" sine "$2" vol "$3"
-    sleep 2
-    play -n synth "$1" sine "$2" vol "$3"
-
-
 }
+
+run_synth_focus(){
+    play -n synth "$1" sine 35 tremolo 8 vol 0.24
+}
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -202,7 +204,9 @@ main() {
     
     render_status "synthesizing" "$C_PEARL"
     echo ""
-    run_synth "$SYNTH_DURATION" "$SYNTH_FREQ_RANGE" "$SYNTH_VOLUME"
+    
+    run_synth_focus "$SYNTH_DURATION"
+    #run_synth "$SYNTH_DURATION" "$SYNTH_FREQ_RANGE" "$SYNTH_VOLUME"
     
     END_TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S %Z")
     render_timestamp "session end  " "$END_TIMESTAMP"
