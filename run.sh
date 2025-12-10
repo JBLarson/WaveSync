@@ -7,7 +7,8 @@ set -euo pipefail
 
 readonly SYNTH_DURATION="${WAVESYNC_DURATION:-1200}"
 readonly SYNTH_FREQ_RANGE="${WAVESYNC_FREQ_RANGE:-26-40}"
-readonly SYNTH_VOLUME="${WAVESYNC_VOLUME:-0.24}"
+readonly SYNTH_VOLUME="${WAVESYNC_VOLUME:-0.18}"
+readonly MACOS_SAFE_MAX=0.25
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  IRIDESCENT INDIGO PALETTE
@@ -188,13 +189,45 @@ cleanup() {
 
 trap cleanup INT TERM
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  AUDIO DEVICE MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+reinit_audio_device() {
+    # Get current volume, set to 0, then restore (forces hardware refresh)
+    local current_vol
+    current_vol=$(osascript -e "output volume of (get volume settings)")
+    osascript -e "set volume output volume 0" 2>/dev/null
+    sleep 0.3
+    osascript -e "set volume output volume $current_vol" 2>/dev/null
+    sleep 0.5
+}
+
+
+check_system_volume() {
+    local sys_vol
+    sys_vol=$(osascript -e "output volume of (get volume settings)")
+    
+    if (( sys_vol > 15 )); then
+        echo -e "\n${C_ACCENT}[WARNING]${C_RESET} System volume at ${sys_vol}% - reducing to 15% for safety"
+        osascript -e "set volume output volume 15"
+        sleep 1
+    fi
+}
+
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
 main() {
     check_sox
-    
+
+    reinit_audio_device
+
     render_header
     render_info
     
